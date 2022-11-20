@@ -3,6 +3,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config()
 const jwt = require('jsonwebtoken');
+const { query } = require('express');
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -42,11 +43,23 @@ async function run() {
         const appointmentOptionCollection = client.db('DentalLab').collection('appointmentOptions');
         const bookingCollection = client.db('DentalLab').collection('bookings');
         const userCollection = client.db('DentalLab').collection('users');
+        const doctorCollection = client.db('DentalLab').collection('doctors');
+
+        //verify admin 
+        //this should be used after verifyJWT
+        const verifyAdmin = async (req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            const query = { email: decodedEmail }
+            const user = await userCollection.findOne(query);
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
 
         //appointment options get api
         app.get('/appointmentOptions', async (req, res) => {
             const date = req.query.date;
-
             const query = {};
             const options = await appointmentOptionCollection.find(query).toArray()
             //get the bookings of the provided date
@@ -199,6 +212,31 @@ async function run() {
         app.post('/users', async (req, res) => {
             const user = req.body;
             const result = await userCollection.insertOne(user);
+            res.send(result);
+        })
+        //
+        app.get('/appointmentSpecialty', async (req, res) => {
+            const query = {};
+            const result = await appointmentOptionCollection.find(query).project({ name: 1 }).toArray()
+            res.send(result);
+        })
+        //get doctors api
+        app.get('/doctors', verifyJWT, verifyAdmin, async (req, res) => {
+            const query = {};
+            const doctors = await doctorCollection.find(query).toArray();
+            res.send(doctors);
+        })
+        //add doctor api
+        app.post('/doctors', verifyJWT, async (req, res) => {
+            const doctor = req.body;
+            const result = await doctorCollection.insertOne(doctor);
+            res.send(result);
+        })
+        //delete a doctor api
+        app.delete('/doctors/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const result = await doctorCollection.deleteOne(filter);
             res.send(result);
         })
     }
